@@ -1,0 +1,872 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>VITOVERSE — Realistic Planet Edition</title>
+<meta name="description" content="Vito Liasiano — Vitoverse Realistic Planet Edition (Earth, Saturn, Mercury, Sun)" />
+<style>
+/* --------------------------
+   RESET & BASE
+   -------------------------- */
+:root{
+  --bg:#03020a;
+  --muted: rgba(255,255,255,0.75);
+  --accentA: #00c8ff;
+  --accentB: #7a00ff;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;font-family:Inter, "Segoe UI", system-ui, Arial, sans-serif;background:var(--bg);color:#eaf9ff;overflow:hidden;-webkit-font-smoothing:antialiased;}
+a{color:inherit}
+button{cursor:pointer;border:0;background:transparent;color:inherit}
+
+/* Canvas */
+canvas#three{position:fixed;inset:0;width:100%;height:100%;display:block;z-index:0}
+
+/* Aurora glow */
+.aurora{position:fixed;inset:0;z-index:-1;pointer-events:none;background:
+    radial-gradient(circle at 18% 30%, rgba(0,200,255,0.06), transparent 12%),
+    radial-gradient(circle at 82% 72%, rgba(120,0,255,0.06), transparent 12%);
+  filter: blur(110px) saturate(150%);mix-blend-mode:screen}
+
+/* HUD wrapper */
+.hud{position:fixed;inset:0;z-index:40;pointer-events:none;display:flex;flex-direction:column;align-items:center}
+
+/* Top nav */
+header.top{pointer-events:auto;margin-top:18px;padding:8px 14px;border-radius:12px;background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(0,0,0,0.06));border:1px solid rgba(255,255,255,0.04);box-shadow:0 10px 40px rgba(0,0,0,0.6);display:flex;gap:.6rem;align-items:center}
+header.top a{pointer-events:auto;color:#bffcff;font-weight:700;padding:6px 10px;border-radius:8px;text-decoration:none}
+header.top a:hover{background:rgba(255,255,255,0.02)}
+
+/* Title */
+.title{margin-top:64px;pointer-events:none;text-align:center;padding:0 12px}
+.title h1{font-size:clamp(20px,4vw,46px);background:linear-gradient(90deg,var(--accentA),var(--accentB));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.title p{color:rgba(255,255,255,0.72);font-size:14px}
+
+/* Hint */
+.hint{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;color:rgba(255,255,255,0.72);font-weight:700;z-index:50;pointer-events:none}
+
+/* Planet label */
+.planet-label{position:fixed;z-index:45;pointer-events:none;font-weight:900;color:#9ffaf3;text-shadow:0 8px 30px rgba(0,0,0,0.6);transform:translate(-50%,-50%);display:none}
+
+/* Hologram assistant */
+.holo-wrap{position:fixed;right:18px;bottom:18px;z-index:60;pointer-events:auto;display:flex;flex-direction:column;align-items:flex-end;gap:12px}
+.holo-btn{width:72px;height:72px;border-radius:16px;background:linear-gradient(135deg,var(--accentA),var(--accentB));display:flex;align-items:center;justify-content:center;box-shadow:0 30px 70px rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.04);cursor:pointer}
+.holo-panel{width:420px;max-width:92vw;background:linear-gradient(180deg,rgba(6,6,10,0.96),rgba(12,8,18,0.98));border-radius:14px;box-shadow:0 40px 120px rgba(0,0,0,0.75);overflow:hidden;display:none;border:1px solid rgba(255,255,255,0.03)}
+.holo-header{padding:.6rem .8rem;display:flex;align-items:center;gap:.6rem;border-bottom:1px solid rgba(255,255,255,0.02)}
+.holo-messages{padding:.8rem;max-height:30px;overflow:auto;display:flex;flex-direction:column;gap:.45rem}
+.msg{max-width:78%;padding:.5rem .7rem;border-radius:12px;font-size:.95rem}
+.msg.bot{margin-right:auto;background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));color:#eaffff;border:1px solid rgba(255,255,255,0.03)}
+.msg.user{margin-left:auto;background:var(--accentA);color:#022}
+.holo-input{display:flex;gap:.5rem;padding:.6rem;border-top:1px solid rgba(255,255,255,0.02)}
+.holo-input input{flex:1;padding:.5rem .7rem;border-radius:10px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:inherit}
+
+/* Panel overlay */
+.panel-overlay{
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 70;
+  width: 80vw;
+  max-width: 980px;
+  
+  /* FIX AGAR TIDAK KELUAR LAYAR */
+  max-height: 85vh;
+  overflow-y: auto;
+  
+  pointer-events: auto;
+  display: none;
+  border-radius: 14px;
+  padding: 18px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(10,6,20,0.55));
+  border: 1px solid rgba(255,255,255,0.04);
+  box-shadow: 0 40px 120px rgba(0,0,0,0.6);
+  backdrop-filter: blur(6px);
+}
+
+.panel-overlay::-webkit-scrollbar{
+  width: 6px;
+}
+
+.panel-overlay::-webkit-scrollbar-thumb{
+  background: rgba(255,255,255,0.15);
+  border-radius: 50px;
+}
+
+.panel-grid{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  align-items: start;
+}
+
+.panel-close{
+  position: absolute;
+  z-index: 9999;
+  right: 14px;
+  top: 12px;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.04);
+  color: #bff;
+  padding: .35rem .6rem;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+
+/* Profile */
+.profile{display:flex;flex-direction:column;align-items:center;gap:12px}
+.profile img{width:160px;height:160px;object-fit:cover;border-radius:50%;border:6px solid rgba(0,200,255,0.12);box-shadow:0 8px 40px rgba(120,0,255,0.06)}
+.profile h2{font-size:22px;background:linear-gradient(90deg,var(--accentA),var(--accentB));-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:4px}
+.profile p{color:rgba(255,255,255,0.78);text-align:center;margin:0 6px}
+
+/* Skills */
+.skills{width:100%;margin-top:8px;display:flex;flex-direction:column;gap:10px}
+.skill-row{display:flex;align-items:center;gap:10px}
+.skill-name{width:110px;font-weight:700;color:#bff}
+.skill-bar{flex:1;height:12px;background:rgba(255,255,255,0.04);border-radius:999px;overflow:hidden}
+.skill-fill{height:100%;width:0%;border-radius:999px;background:linear-gradient(90deg,var(--accentA),var(--accentB));box-shadow:0 6px 20px rgba(120,0,255,0.18);transition:width 1.2s ease}
+
+/* Gallery */
+.gallery-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;width:100%}
+.tile{position:relative;overflow:hidden;border-radius:10px;border:1px solid rgba(255,255,255,0.03);background:linear-gradient(180deg,rgba(255,255,255,0.01),rgba(0,0,0,0.04))}
+.tile img{width:100%;height:180px;object-fit:cover;transform:scale(1);transition:transform .45s ease,box-shadow .45s ease}
+.tile:hover img{transform:scale(1.06);box-shadow:0 30px 80px rgba(120,0,255,0.12)}
+.tile .caption{position:absolute;left:8px;bottom:8px;background:linear-gradient(90deg,rgba(0,200,255,0.12),rgba(120,0,255,0.12));padding:6px 8px;border-radius:8px;font-weight:700;font-size:13px;color:#fff}
+
+/* Contact icons */
+.contact-grid{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:8px}
+.contact-icon{width:56px;height:56px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,rgba(0,200,255,0.06),rgba(120,0,255,0.06));border:1px solid rgba(255,255,255,0.03);transition:transform .18s ease;text-decoration:none;color:#bff}
+.contact-icon:hover{transform:translateY(-6px);box-shadow:0 28px 80px rgba(120,0,255,0.12)}
+
+/* Radial menu (demo, kept fixed & subtle) */
+.menu{position:fixed;left:50%;bottom:60px;transform:translateX(-50%);width:280px;height:280px;display:flex;align-items:center;justify-content:center;pointer-events:auto;z-index:80}
+.menu .toggle{position:relative;height:60px;width:60px;background:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#333;font-size:2rem;cursor:pointer;transition:1.25s;z-index:5}
+.menu li{position:absolute;left:0;list-style:none;transition:.5s;transform:rotate(calc(360deg / 8 * var(--i)));transform-origin:140px;scale:0;transition-delay:calc(0.05s*var(--i))}
+.menu.active li{scale:1}
+.menu li a{position:relative;display:flex;transform:rotate(calc(360deg / -8 * var(--i)));width:60px;height:60px;background-color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.75rem;color:var(--clr);text-decoration:none;box-shadow:0 3px 4px rgba(0,0,0,0.15);transition:.5s}
+.menu li a:hover{font-size:2.5rem;box-shadow:0 0 0 2px var(--clr),0 0 0 6px #fff}
+
+/* Portal flash */
+.portal-flash{position:fixed;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:90;opacity:0;transition:opacity .4s;mix-blend-mode:screen;background:radial-gradient(circle at 50% 40%, rgba(255,255,255,0.08), transparent 30%);}
+
+/* Buttons */
+.btn{padding:.4rem .6rem;border-radius:8px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);color:#bff;cursor:pointer}
+
+/* Responsive */
+@media (max-width:980px){
+  .panel-grid{grid-template-columns:1fr}
+  .gallery-grid{grid-template-columns:repeat(2,1fr)}
+  .profile img{width:120px;height:120px}
+  .holo-panel{width:94vw}
+}
+@media (max-width:600px){
+  header.top{flex-wrap:wrap;gap:8px;padding:6px 10px;margin-top:12px}
+  .title{margin-top:48px;padding:0 8px}
+  .title h1{font-size:22px}
+  .title p{font-size:12px}
+  .holo-btn{width:62px;height:62px;border-radius:14px}
+  .holo-panel{max-height:68vh}
+  .holo-messages{max-height:220px}
+  .gallery-grid{grid-template-columns:1fr 1fr;gap:10px}
+  .tile img{height:130px}
+  .contact-icon{width:52px;height:52px}
+  .menu{transform:scale(0.8)}
+  .menu .toggle{width:56px;height:56px;font-size:1.8rem}
+}
+@media (max-width:430px){
+  .title h1{font-size:18px}
+  .gallery-grid{grid-template-columns:1fr}
+  .portal-flash{background:radial-gradient(circle at 50% 40%, rgba(255,255,255,0.06), transparent 25%)}
+}
+</style>
+</head>
+<body>
+
+<!-- Aurora + Canvas -->
+<div class="aurora" aria-hidden="true"></div>
+<canvas id="three" aria-label="Three.js scene"></canvas>
+
+<!-- HUD -->
+<div class="hud">
+  <header class="top" role="navigation" style="align-self:center;pointer-events:auto;">
+    <a href="#" data-target="about" class="nav">ABOUT</a>
+    <a href="#" data-target="projects" class="nav">PROJECTS</a>
+    <a href="#" data-target="gallery" class="nav">GALLERY</a>
+    <a href="#" data-target="contact" class="nav">CONTACT</a>
+  </header>
+
+  <div class="title" aria-hidden="true">
+    <h1>SELAMAT DATANG DI WEBSITE UNIVERSE</h1>
+    <p>Klik/seret untuk terbang • Klik planet untuk masuk • Tekan 1–4 untuk melompat</p>
+  </div>
+
+  <div class="hint">Tips: seret untuk menjelajah • klik planet untuk memperbesar</div>
+
+  <div id="label-about" class="planet-label">ABOUT</div>
+  <div id="label-projects" class="planet-label">PROJECTS</div>
+  <div id="label-gallery" class="planet-label">GALLERY</div>
+  <div id="label-contact" class="planet-label">CONTACT</div>
+</div>
+
+<!-- Hologram Assistant -->
+<div class="holo-wrap">
+  <div class="holo-btn" id="holo-button" title="Asisten Hologram">
+    <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M12 2C7.03 2 3 6.03 3 11c0 2.25.84 4.32 2.24 5.89L5 21l4.39-1.1c.9.15 1.82.1 2.69-.14C17.97 18.57 21 14.54 21 10c0-4.97-4.03-9-9-9z" fill="#012" opacity=".08"/><path d="M12 3.2c3.83 0 6.97 3.14 6.97 7 0 1.86-.7 3.56-1.96 4.83-1.33 1.33-3.02 2.2-4.99 2.36l-.02.01c-1.46.11-2.96-.04-4.35-.44L6 19l-.02-.02C4.12 17.68 3 14.58 3 10.2 3 6.34 6.17 3.2 12 3.2z" fill="#00c8ff"/></svg>
+  </div>
+
+  <div class="holo-panel" id="holo-panel" aria-hidden="true">
+    <div class="holo-header"><strong>Asisten Hologram</strong><div style="flex:1"></div><button id="holo-close" class="btn">Close</button></div>
+    <div class="holo-messages" id="holo-messages">
+      <div class="msg bot">Halo! Saya Nara-V, asisten virtual Vito. Mau lihat profil, project, atau kontak?</div>
+    </div>
+    <div class="holo-input">
+      <input id="holo-input" placeholder="Tulis pesan..." aria-label="Chat input">
+      <button id="holo-send" class="btn">Kirim</button>
+    </div>
+  </div>
+</div>
+
+<!-- Portal flash -->
+<div id="portal-flash" class="portal-flash" aria-hidden="true"></div>
+
+<!-- Panel overlay -->
+<div class="panel-overlay" id="panel-overlay" role="dialog" aria-hidden="true">
+  <button class="panel-close btn" id="panel-close">Close</button>
+  <div class="panel-grid" id="panel-content"></div>
+</div>
+
+<!-- Audio (replace path with your file) -->
+<audio id="audio" loop crossorigin="anonymous"><source src="assets/audio/cyberwave_loop.mp3" type="audio/mpeg"></audio>
+
+<!-- Minimal radial menu (optional) -->
+<ul class="menu" aria-hidden="true">
+  <!-- example items (positioning handled by CSS transforms) -->
+  <li style="--i:0"><a href="#" style="--clr:#ff6b6b">A</a></li>
+  <li style="--i:1"><a href="#" style="--clr:#ffd93d">B</a></li>
+  <li style="--i:2"><a href="#" style="--clr:#6bcB77">C</a></li>
+  <li style="--i:3"><a href="#" style="--clr:#6bb9ff">D</a></li>
+  <li style="--i:4"><a href="#" style="--clr:#d3a4ff">E</a></li>
+  <li style="--i:5"><a href="#" style="--clr:#ff9ad5">F</a></li>
+  <li style="--i:6"><a href="#" style="--clr:#ffd1a4">G</a></li>
+  <li style="--i:7"><a href="#" style="--clr:#b0f0ff">H</a></li>
+</ul>
+
+<!-- ===========================
+     MODULE SCRIPT: Three.js + App
+     (Imports from Skypack as requested)
+     NOTE: Ensure internet access for skypack imports or switch to local builds.
+     ============================ -->
+<script type="module">
+/* ---------------------------
+   Imports (skypack)
+   --------------------------- */
+import * as THREE from 'https://cdn.skypack.dev/three@0.132.2';
+import { OrbitControls } from 'https://cdn.skypack.dev/three@0.132.2/examples/jsm/controls/OrbitControls.js';
+import { EffectComposer } from 'https://cdn.skypack.dev/three@0.132.2/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'https://cdn.skypack.dev/three@0.132.2/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'https://cdn.skypack.dev/three@0.132.2/examples/jsm/postprocessing/UnrealBloomPass.js';
+import gsap from 'https://cdn.skypack.dev/gsap@3.12.2';
+
+/* ---------------------------
+   Basic renderer + scene + camera
+   --------------------------- */
+const canvas = document.getElementById('three');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.physicallyCorrectLights = true;
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(55, window.innerWidth/window.innerHeight, 0.1, 1000);
+camera.position.set(0, 1.6, 24);
+
+/* ---------------------------
+   Composer + bloom
+   --------------------------- */
+const composer = new EffectComposer(renderer);
+composer.setSize(window.innerWidth, window.innerHeight);
+composer.addPass(new RenderPass(scene, camera));
+
+const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.2, 0.4, 0.2);
+bloom.threshold = 0.12;
+bloom.strength = 1.2;
+bloom.radius = 0.8;
+composer.addPass(bloom);
+
+/* ---------------------------
+   Lights
+   --------------------------- */
+const ambient = new THREE.AmbientLight(0xbfefff, 0.45); scene.add(ambient);
+const key = new THREE.DirectionalLight(0xffffff, 0.9); key.position.set(5,10,6); scene.add(key);
+
+/* ---------------------------
+   Resize handling
+   --------------------------- */
+window.addEventListener('resize', ()=>{
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  composer.setSize(window.innerWidth, window.innerHeight);
+});
+
+/* ---------------------------
+   Texture loader & textures list
+   Replace asset paths with actual files in assets/
+   --------------------------- */
+const texLoader = new THREE.TextureLoader();
+const textures = {
+  earth: { map: 'assets/textures/planets/earth_daymap.jpg', clouds: 'assets/textures/planets/earth_clouds.png' },
+  mercury: { map: 'assets/textures/planets/mercury_map.jpg' },
+  saturn: { map: 'assets/textures/planets/saturn_map.jpg', ring: 'assets/textures/planets/saturn_ring.png' },
+  sun: { map: 'assets/textures/planets/sun_map.jpg' }
+};
+
+/* ---------------------------
+   Helper: create radial circle texture for halos
+   --------------------------- */
+function makeCircleTexture(hex, size=256, alpha=0.12){
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  const ctx = c.getContext('2d');
+  const grad = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
+  const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+  grad.addColorStop(0, `rgba(${r},${g},${b},${alpha})`);
+  grad.addColorStop(0.7, `rgba(${r},${g},${b},${alpha*0.5})`);
+  grad.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = grad; ctx.fillRect(0,0,size,size);
+  return new THREE.CanvasTexture(c);
+}
+
+/* ---------------------------
+   Galaxy particles
+   --------------------------- */
+let galaxy;
+let particleOptions = { count:22000, radius:9, branches:6, spin:1.1, randomness:0.45, randomnessPower:3.1, size:0.013 };
+
+function makeGalaxy(opts = particleOptions){
+  if(galaxy){ scene.remove(galaxy); galaxy.geometry.dispose(); galaxy.material.dispose(); galaxy = null; }
+  const geo = new THREE.BufferGeometry();
+  const positions = new Float32Array(opts.count * 3);
+  const colors = new Float32Array(opts.count * 3);
+  const cA = new THREE.Color('#00c8ff'), cB = new THREE.Color('#7a00ff');
+
+  for(let i = 0; i < opts.count; i++){
+    const i3 = i*3;
+    const r = Math.random() * opts.radius;
+    const branch = (i % opts.branches) / opts.branches * Math.PI * 2;
+    const spin = r * opts.spin;
+    const rx = Math.pow(Math.random(), opts.randomnessPower) * (Math.random() < 0.5 ? 1 : -1) * opts.randomness * r;
+    const ry = (Math.random() - 0.5) * 0.35 * r;
+    const rz = Math.pow(Math.random(), opts.randomnessPower) * (Math.random() < 0.5 ? 1 : -1) * opts.randomness * r;
+
+    positions[i3] = Math.cos(branch + spin) * r + rx;
+    positions[i3 + 1] = ry;
+    positions[i3 + 2] = Math.sin(branch + spin) * r + rz;
+
+    const mixed = cA.clone().lerp(cB, r / opts.radius);
+    colors[i3] = mixed.r; colors[i3 + 1] = mixed.g; colors[i3 + 2] = mixed.b;
+  }
+
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  const mat = new THREE.PointsMaterial({ size: opts.size, sizeAttenuation: true, depthWrite: false, blending: THREE.AdditiveBlending, vertexColors: true, transparent: true, opacity: 0.95 });
+  galaxy = new THREE.Points(geo, mat);
+  scene.add(galaxy);
+}
+makeGalaxy();
+
+/* ---------------------------
+   Planets definition & builder
+   --------------------------- */
+const planets = [];
+const defs = [
+  { id:'about', name:'EARTH', pos:new THREE.Vector3(-10,1.2,-6), size:1.9, color:'#00c8ff' },
+  { id:'projects', name:'SATURN', pos:new THREE.Vector3(8.5,-0.6,-4), size:2.2, color:'#7a00ff' },
+  { id:'gallery', name:'MERCURY', pos:new THREE.Vector3(-2,-2.0,-11), size:1.2, color:'#ffba7a' },
+  { id:'contact', name:'SUN', pos:new THREE.Vector3(11.5,1.0,-8), size:1.5, color:'#ffb86b' }
+];
+
+const group = new THREE.Group(); scene.add(group);
+const sphereGeo = new THREE.SphereBufferGeometry(1, 128, 128);
+
+async function buildPlanets(){
+  // load textures (promises)
+  const promises = [];
+  for(const k in textures){
+    for(const t in textures[k]){
+      promises.push(new Promise((res)=> texLoader.load(textures[k][t], (tx)=> res({k,t,tx}), undefined, ()=> res({k,t,tx:null})) ));
+    }
+  }
+  const loaded = await Promise.all(promises);
+  const map = {};
+  loaded.forEach(item => { if(item && item.k){ if(!map[item.k]) map[item.k] = {}; map[item.k][item.t] = item.tx; } });
+
+  defs.forEach(d=>{
+    let mat;
+    if(d.id === 'about'){ // Earth
+      const colorMap = map.earth?.map || null;
+      const cloudMap = map.earth?.clouds || null;
+      mat = new THREE.MeshStandardMaterial({
+        map: colorMap,
+        metalness: 0.0,
+        roughness: 0.8,
+        emissive: new THREE.Color(0x0a1b1f),
+        emissiveIntensity: 0.2
+      });
+      const mesh = new THREE.Mesh(sphereGeo, mat);
+      mesh.scale.set(d.size,d.size,d.size); mesh.position.copy(d.pos); mesh.userData={id:d.id,name:d.name};
+      group.add(mesh); planets.push(mesh);
+
+      if(cloudMap){
+        const cloudMat = new THREE.MeshLambertMaterial({ map: cloudMap, transparent:true, opacity:0.92, depthWrite:false, side:THREE.DoubleSide });
+        const cloud = new THREE.Mesh(new THREE.SphereBufferGeometry(1.01,128,128), cloudMat);
+        cloud.scale.set(d.size*1.012,d.size*1.012,d.size*1.012); cloud.position.copy(d.pos);
+        cloud.userData = { isCloud:true };
+        scene.add(cloud); mesh.userData.cloud = cloud;
+      }
+
+      const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: makeCircleTexture(d.color,256,0.12), transparent:true, opacity:1.0, depthWrite:false }));
+      halo.scale.set(d.size*5,d.size*5,1); halo.position.copy(d.pos); scene.add(halo);
+      mesh.userData.halo = halo;
+
+    } else if(d.id === 'projects'){ // Saturn
+      const satMap = map.saturn?.map || null;
+      mat = new THREE.MeshStandardMaterial({ map: satMap, metalness:0.05, roughness:0.6, emissive:new THREE.Color(0x120012), emissiveIntensity:0.12 });
+      const mesh = new THREE.Mesh(sphereGeo, mat);
+      mesh.scale.set(d.size,d.size,d.size); mesh.position.copy(d.pos); mesh.userData={id:d.id,name:d.name};
+      group.add(mesh); planets.push(mesh);
+
+      const ringTex = map.saturn?.ring || null;
+      const ringGeo = new THREE.RingBufferGeometry(d.size*1.45, d.size*2.2, 256);
+      const ringMat = new THREE.MeshBasicMaterial({ map: ringTex, side:THREE.DoubleSide, transparent:true, opacity:0.95, blending:THREE.AdditiveBlending });
+      const ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.rotation.x = Math.PI / 2.2;
+      ring.position.copy(d.pos);
+      scene.add(ring); mesh.userData.ring = ring;
+
+      const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: makeCircleTexture(d.color,256,0.12), transparent:true, opacity:1.0, depthWrite:false }));
+      halo.scale.set(d.size*5,d.size*5,1); halo.position.copy(d.pos); scene.add(halo); mesh.userData.halo = halo;
+
+    } else if(d.id === 'gallery'){ // Mercury
+      const mercMap = map.mercury?.map || null;
+      mat = new THREE.MeshStandardMaterial({ map: mercMap, metalness:0.2, roughness:0.45, emissive:new THREE.Color(0x0a0705), emissiveIntensity:0.08 });
+      const mesh = new THREE.Mesh(sphereGeo, mat);
+      mesh.scale.set(d.size,d.size,d.size); mesh.position.copy(d.pos); mesh.userData={id:d.id,name:d.name};
+      group.add(mesh); planets.push(mesh);
+
+      const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: makeCircleTexture(d.color,256,0.08), transparent:true, opacity:1.0, depthWrite:false }));
+      halo.scale.set(d.size*4.2,d.size*4.2,1); halo.position.copy(d.pos); scene.add(halo); mesh.userData.halo = halo;
+
+    } else if(d.id === 'contact'){ // Sun
+      const sunMap = map.sun?.map || null;
+      mat = new THREE.MeshBasicMaterial({ map: sunMap, emissive:new THREE.Color(0xffa86b), transparent:false });
+      const mesh = new THREE.Mesh(sphereGeo, mat);
+      mesh.scale.set(d.size,d.size,d.size); mesh.position.copy(d.pos); mesh.userData={id:d.id,name:d.name};
+      group.add(mesh); planets.push(mesh);
+
+      const sunLight = new THREE.PointLight(0xffd7a8, 2.0, 120);
+      sunLight.position.copy(d.pos); scene.add(sunLight); mesh.userData.sunLight = sunLight;
+
+      const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: makeCircleTexture(d.color,512,0.18), transparent:true, opacity:1.0, depthWrite:false }));
+      halo.scale.set(d.size*6,d.size*6,1); halo.position.copy(d.pos); scene.add(halo); mesh.userData.halo = halo;
+    }
+  });
+}
+
+/* Build planets now (top-level await allowed in modules) */
+await buildPlanets();
+
+/* ---------------------------
+   Shooting stars
+   --------------------------- */
+const shooting = [];
+function makeShooting(){
+  const g = new THREE.BufferGeometry();
+  const p = new Float32Array([0,0,0, Math.random()*1.2+0.6, Math.random()*0.5+0.1, 0]);
+  g.setAttribute('position', new THREE.BufferAttribute(p,3));
+  const m = new THREE.LineBasicMaterial({ color:0xffffff, transparent:true, opacity:0.95 });
+  const l = new THREE.Line(g,m);
+  l.position.set((Math.random()-0.5)*20, Math.random()*10-2, (Math.random()-0.5)*14);
+  l.userData.v = new THREE.Vector3(-0.08 - Math.random()*0.06, -0.05 - Math.random()*0.02, 0);
+  scene.add(l);
+  shooting.push(l);
+  setTimeout(()=>{ scene.remove(l); const i = shooting.indexOf(l); if(i>-1) shooting.splice(i,1); }, 2700);
+}
+setInterval(()=>{ if(Math.random() < 0.6) makeShooting(); }, 1500);
+
+/* ---------------------------
+   Controls
+   --------------------------- */
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.enablePan = false;
+controls.minDistance = 3;
+controls.maxDistance = 120;
+controls.autoRotate = false;
+
+/* ---------------------------
+   Audio analyser
+   --------------------------- */
+const audioEl = document.getElementById('audio');
+let audioCtx, analyser, freqData;
+async function setupAudio(){
+  try {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioCtx.createAnalyser(); analyser.fftSize = 256;
+    freqData = new Uint8Array(analyser.frequencyBinCount);
+    const src = audioCtx.createMediaElementSource(audioEl);
+    src.connect(analyser);
+    analyser.connect(audioCtx.destination);
+  } catch(e) { console.warn('Audio setup failed', e); }
+}
+document.addEventListener('pointerdown', async ()=>{
+  if(!audioCtx) await setupAudio();
+  if(audioCtx && audioCtx.state === 'suspended') await audioCtx.resume();
+}, { once:true });
+
+/* audio toggle control */
+const leftDiv = document.createElement('div');
+leftDiv.style.position='fixed'; leftDiv.style.left='18px'; leftDiv.style.bottom='18px'; leftDiv.style.zIndex='55'; leftDiv.style.pointerEvents='auto';
+const btnAudio = document.createElement('button'); btnAudio.className='btn'; btnAudio.textContent='🔊 Sound';
+btnAudio.onclick = async ()=>{
+  if(!audioCtx) await setupAudio();
+  if(audioEl.paused){ try{ await audioEl.play(); btnAudio.textContent='🔈 Sound'; }catch(e){ alert('Klik halaman untuk mengaktifkan audio') } }
+  else { audioEl.pause(); btnAudio.textContent='🔊 Sound' }
+};
+leftDiv.appendChild(btnAudio); document.body.appendChild(leftDiv);
+
+/* ---------------------------
+   Raycast + click to zoom into planet
+   --------------------------- */
+const ray = new THREE.Raycaster();
+let isMoving = false;
+
+function gotoPlanet(planet, duration = 1400){
+  if(!planet) return;
+  isMoving = true;
+  const target = planet.position.clone();
+  const camTo = target.clone().add(new THREE.Vector3(0, 0.6, planet.scale.x * 2.8));
+  gsap.to(camera.position, { x: camTo.x, y: camTo.y, z: camTo.z, duration: duration/1000, ease: 'power2.inOut', onUpdate: ()=> camera.lookAt(target) });
+  const pf = document.getElementById('portal-flash'); pf.style.opacity = '1';
+  setTimeout(()=> pf.style.opacity = '0', 260);
+  setTimeout(()=> { isMoving = false; showPanel(planet.userData.id); }, duration + 80);
+}
+
+renderer.domElement.addEventListener('pointerdown', (ev)=>{
+  if(isMoving) return;
+  const mouse = new THREE.Vector2((ev.clientX / window.innerWidth) * 2 - 1, -(ev.clientY / window.innerHeight) * 2 + 1);
+  ray.setFromCamera(mouse, camera);
+  const ints = ray.intersectObjects(planets);
+  if(ints.length > 0) gotoPlanet(ints[0].object, 1100);
+});
+
+/* keyboard quick jump */
+window.addEventListener('keydown', (e)=>{ if(e.key >= '1' && e.key <= '4'){ const idx = parseInt(e.key) - 1; if(planets[idx]) gotoPlanet(planets[idx], 1000); } });
+
+/* nav links */
+document.querySelectorAll('.nav').forEach(n => n.addEventListener('click', (ev)=>{
+  ev.preventDefault();
+  const t = ev.currentTarget.dataset.target;
+  const pl = planets.find(p => p.userData.id === t);
+  if(pl) gotoPlanet(pl, 1100);
+}));
+
+/* ---------------------------
+   Panel content data (profile/projects/gallery/contact)
+   --------------------------- */
+const panel = document.getElementById('panel-overlay');
+const panelContent = document.getElementById('panel-content');
+const panelClose = document.getElementById('panel-close');
+panelClose.addEventListener('click', ()=> panel.style.display = 'none');
+
+const profileData = {
+  name: "VITO LIASIANO",
+  title: "Web Developer • Interactive UI • Three.js • AI",
+  description: "Developer yang menjelajahi semesta kode & desain. Menciptakan pengalaman digital interaktif dan penuh jiwa. Saya membangun aplikasi web, animasi 3D, dan integrasi AI untuk produk yang berdampak.",
+  photo: "assets/img/vito.jpg",
+  skills: [ { name:'HTML', level:95 }, { name:'CSS', level:92 }, { name:'JavaScript', level:70 }, { name:'PHP', level:70 }, { name:'Three.js', level:70 }, { name:'AI', level:100 } ]
+};
+const projectsData = [
+  { 
+    title: 'Yummaland Kasir', 
+    desc: 'Aplikasi kasir web untuk playground dengan laporan lengkap & cetak struk.', 
+    url: 'https://yummaland-app.example.com',
+    button: 'Kunjungi App'
+  },
+  { 
+    title: 'Yummaland-Website', 
+    desc: 'Tampilan Perkenalan Website playground.', 
+    url: ' https://vitoliasiano77.github.io/yummaland_website/',
+    button: 'Lihat Website'
+  },
+  { 
+    title: 'Portofolio Interaktif', 
+    desc: 'Website portofolio Three.js + neon cyberpunk UI.', 
+    url: 'https://vitoverse.example.com',
+    button: 'Buka Portofolio'
+  }
+];
+
+
+const galleryFiles = ['assets/img/vito1.jpg','assets/img/vito2.jpg','assets/img/vito3.jpg','assets/img/vito4.jpg','assets/img/vito5.jpg'];
+const contactLinks = { email:'mailto:vitoliasiano7@outlook.com', instagram:'https://www.instagram.com/vitoliasiano_', github:'https://github.com/vitoliasiano77', whatsapp:'https://wa.me/6281274291173', linkedin:'https://www.linkedin.com/in/yourprofile' };
+
+/* build panels */
+function buildAbout(){
+  panelContent.innerHTML = '';
+  const left = document.createElement('div'); left.className = 'profile';
+  const img = document.createElement('img'); img.src = profileData.photo; img.alt = profileData.name; left.appendChild(img);
+  const h = document.createElement('h2'); h.textContent = profileData.name; left.appendChild(h);
+  const t = document.createElement('div'); t.style.color='rgba(255,255,255,0.75)'; t.style.fontWeight='700'; t.style.marginBottom='6px'; t.textContent = profileData.title; left.appendChild(t);
+  const p = document.createElement('p'); p.textContent = profileData.description; left.appendChild(p);
+  const skillsWrap = document.createElement('div'); skillsWrap.className='skills';
+  profileData.skills.forEach(s => {
+    const row = document.createElement('div'); row.className='skill-row';
+    const name = document.createElement('div'); name.className='skill-name'; name.textContent = s.name;
+    const bar = document.createElement('div'); bar.className='skill-bar';
+    const fill = document.createElement('div'); fill.className='skill-fill'; fill.style.width='0%'; fill.dataset.target = s.level+'%';
+    bar.appendChild(fill); row.appendChild(name); row.appendChild(bar); skillsWrap.appendChild(row);
+  });
+  left.appendChild(skillsWrap);
+  const right = document.createElement('div'); right.style.padding='6px';
+  const intro = document.createElement('h3'); intro.textContent = 'Highlights'; intro.style.marginBottom='8px'; right.appendChild(intro);
+  projectsData.forEach(pr => {
+    const prEl = document.createElement('div'); prEl.style.marginBottom='10px';
+    const pt = document.createElement('div'); pt.style.fontWeight='800'; pt.textContent = pr.title; prEl.appendChild(pt);
+    const pd = document.createElement('div'); pd.style.color='rgba(255,255,255,0.75)'; pd.textContent = pr.desc; prEl.appendChild(pd);
+    right.appendChild(prEl);
+  });
+  panelContent.appendChild(left); panelContent.appendChild(right);
+  setTimeout(()=> document.querySelectorAll('.skill-fill').forEach(el=> el.style.width = el.dataset.target ), 120);
+}
+
+function buildProjects() {
+  panelContent.innerHTML = '';
+
+  projectsData.forEach(proj => {
+    const box = document.createElement('div');
+    box.style.padding = '14px';
+    box.style.border = '1px solid rgba(255,255,255,0.05)';
+    box.style.borderRadius = '12px';
+    box.style.background = 'linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.25))';
+    box.style.display = 'flex';
+    box.style.flexDirection = 'column';
+    box.style.gap = '8px';
+
+    const title = document.createElement('h3');
+    title.textContent = proj.title;
+    title.style.background = 'linear-gradient(90deg,var(--accentA),var(--accentB))';
+    title.style.webkitBackgroundClip = 'text';
+    title.style.color = 'transparent';
+
+    const desc = document.createElement('p');
+    desc.textContent = proj.desc;
+    desc.style.color = 'rgba(255,255,255,0.8)';
+    desc.style.fontSize = '14px';
+    desc.style.lineHeight = '1.4';
+
+    const btn = document.createElement('a');
+    btn.textContent = proj.button;
+    btn.href = proj.url;
+    btn.target = '_blank';
+    btn.style.marginTop = '6px';
+    btn.style.padding = '.45rem .75rem';
+    btn.style.borderRadius = '8px';
+    btn.style.textAlign = 'center';
+    btn.style.textDecoration = 'none';
+    btn.style.color = '#012';
+    btn.style.fontWeight = '700';
+    btn.style.background = 'linear-gradient(90deg,var(--accentA),var(--accentB))';
+    btn.style.boxShadow = '0 10px 30px rgba(0,0,0,0.4)';
+
+    box.appendChild(title);
+    box.appendChild(desc);
+    box.appendChild(btn);
+
+    panelContent.appendChild(box);
+  });
+}
+
+function buildGallery() {
+  panelContent.innerHTML = '';
+
+  // === Tambah tombol Close sama seperti ABOUT ===
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'panel-close btn';
+  closeBtn.id = 'gallery-close';
+  closeBtn.textContent = 'Close';
+
+  closeBtn.addEventListener('click', () => {
+    document.getElementById('panel-overlay').style.display = 'none';
+  });
+
+  panelContent.appendChild(closeBtn);
+  // ===============================================
+
+  const wrapper = document.createElement('div');
+  wrapper.style.gridColumn = '1/-1';
+
+  const grid = document.createElement('div');
+  grid.className = 'gallery-grid';
+
+  galleryFiles.forEach((f, i) => {
+    const tile = document.createElement('div');
+    tile.className = 'tile';
+
+    const img = document.createElement('img');
+    img.src = f;
+    img.alt = 'gallery' + (i + 1);
+
+    const cap = document.createElement('div');
+    cap.className = 'caption';
+    cap.textContent = `Foto ${i + 1}`;
+
+    tile.appendChild(img);
+    tile.appendChild(cap);
+    grid.appendChild(tile);
+  });
+
+  wrapper.appendChild(grid);
+  panelContent.appendChild(wrapper);
+}
+
+function buildContact(){
+  panelContent.innerHTML=''; const left=document.createElement('div'); left.style.padding='6px';
+  const title=document.createElement('h3'); title.textContent='Kontak'; left.appendChild(title);
+  const desc=document.createElement('div'); desc.style.color='rgba(255,255,255,0.78)'; desc.style.marginBottom='10px'; desc.textContent='Hubungi saya untuk kerja sama, konsultasi, atau demo proyek.'; left.appendChild(desc);
+  const grid=document.createElement('div'); grid.className='contact-grid';
+  function makeIcon(label, href, svg){ const a=document.createElement('a'); a.className='contact-icon'; a.href=href; a.target='_blank'; a.rel='noopener noreferrer'; a.innerHTML = svg + `<span style="position:absolute;left:-9999px">${label}</span>`; return a; }
+  const mailSVG='<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M3 8.5v7c0 .8.7 1.5 1.5 1.5h15c.8 0 1.5-.7 1.5-1.5v-7" stroke="#00c8ff" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 8.5l-9 6-9-6" stroke="#7a00ff" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const igSVG='<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="5" stroke="#00c8ff" stroke-width="1.4"/><path d="M16 11.37a4 4 0 1 1-4.63-4 4 4 0 0 1 4.63 4z" stroke="#7a00ff" stroke-width="1.4"/></svg>';
+  const ghSVG='<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.38 7.86 10.9.57.1.77-.25.77-.55v-2.05c-3.2.7-3.87-1.4-3.87-1.4-.52-1.33-1.28-1.68-1.28-1.68-1.05-.72.08-.71.08-.71 1.16.08 1.77 1.2 1.77 1.2 1.03 1.77 2.7 1.25 3.36.95.1-.74.4-1.25.73-1.54-2.56-.28-5.25-1.28-5.25-5.68 0-1.25.45-2.27 1.18-3.07-.12-.3-.52-1.52.12-3.17 0 0 .96-.31 3.16 1.17a10.9 10.9 0 0 1 2.88-.39c.98 0 1.98.13 2.88.39 2.2-1.48 3.16-1.17 3.16-1.17.64 1.65.24 2.87.12 3.17.74.8 1.18 1.82 1.18 3.07 0 4.41-2.7 5.39-5.27 5.67.41.36.78 1.06.78 2.15v3.19c0 .3.2.66.78.55C20.71 21.38 24 17.08 24 12 24 5.65 18.35.5 12 .5z" fill="#00c8ff"/></svg>';
+  const waSVG='<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M21 11.5a9.4 9.4 0 0 1-2.7 6.7L21 21l-2.9-2.4A9.7 9.7 0 1 1 21 11.5z" stroke="#00c8ff" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const liSVG='<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="2" stroke="#00c8ff" stroke-width="1.2"/><path d="M8 10v7M8 7a2 2 0 1 1 0 4M12 17v-4a2 2 0 1 1 4 0v4" stroke="#7a00ff" stroke-width="1.2" stroke-linecap="round"/></svg>';
+  grid.appendChild(makeIcon('Email', contactLinks.email, mailSVG));
+  grid.appendChild(makeIcon('Instagram', contactLinks.instagram, igSVG));
+  grid.appendChild(makeIcon('GitHub', contactLinks.github, ghSVG));
+  grid.appendChild(makeIcon('WhatsApp', contactLinks.whatsapp, waSVG));
+  grid.appendChild(makeIcon('LinkedIn', contactLinks.linkedin, liSVG));
+  left.appendChild(grid); panelContent.appendChild(left); panelContent.appendChild(document.createElement('div'));
+}
+
+/* show panel */
+function showPanel(id){
+  if(id==='about') buildAbout();
+  else if(id==='projects') buildProjects();
+  else if(id==='gallery') buildGallery();
+  else if(id==='contact') buildContact();
+  panel.style.display = 'block';
+  showLabel(id, id.toUpperCase());
+}
+
+/* label show */
+function showLabel(id, text){
+  const el = document.getElementById('label-'+id);
+  if(!el) return;
+  el.style.display = 'block';
+  el.style.left = (window.innerWidth/2) + 'px';
+  el.style.top = (window.innerHeight/2 - 40) + 'px';
+  el.style.opacity = '1';
+  setTimeout(()=>{ el.style.transition = 'opacity .9s'; el.style.opacity = '0'; }, 1200);
+  setTimeout(()=>{ el.style.display = 'none'; el.style.transition = ''; }, 2100);
+}
+
+/* ---------------------------
+   Animation loop
+   --------------------------- */
+const clock = new THREE.Clock();
+function animate(){
+  const t = clock.getElapsedTime();
+
+  if(galaxy) galaxy.rotation.y = t * 0.015;
+
+  planets.forEach((p,i)=>{
+    p.rotation.y += (0.0012 + i*0.0002);
+    if(p.userData.ring) p.userData.ring.rotation.z += 0.0004 + i*0.0001;
+    if(p.userData.cloud){ p.userData.cloud.rotation.y += 0.0016 + i*0.0002; p.userData.cloud.position.copy(p.position); }
+    if(p.userData.halo){ p.userData.halo.position.copy(p.position); }
+    if(p.userData.sunLight) p.userData.sunLight.intensity = 1.8 + Math.sin(t*1.6)*0.2;
+  });
+
+  for(let i=shooting.length-1;i>=0;i--){
+    const s = shooting[i];
+    s.position.add(s.userData.v);
+    if(s.material.opacity !== undefined) s.material.opacity = Math.max(0, s.material.opacity - 0.007);
+  }
+
+  if(analyser && galaxy && galaxy.material){
+    analyser.getByteFrequencyData(freqData);
+    let bass = 0;
+    for(let i=0;i<8;i++) bass += freqData[i];
+    bass = bass/8/255;
+    galaxy.material.size = Math.max(0.005, particleOptions.size * (1 + bass * 2.4));
+    galaxy.material.needsUpdate = true;
+  }
+
+  controls.update();
+  composer.render();
+  requestAnimationFrame(animate);
+}
+animate();
+
+/* ---------------------------
+   Hover labels follow pointer
+   --------------------------- */
+let hovered = null;
+renderer.domElement.addEventListener('pointermove', (e)=>{
+  const mouse = new THREE.Vector2((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
+  ray.setFromCamera(mouse, camera);
+  const ints = ray.intersectObjects(planets);
+  if(ints.length > 0){
+    const p = ints[0].object;
+    if(hovered !== p){ if(hovered) hovered.material.emissiveIntensity = 0.4; hovered = p; try{ hovered.material.emissiveIntensity = 1.2; }catch(e){} }
+    const label = document.getElementById('label-'+p.userData.id);
+    if(label){ label.style.display='block'; label.style.left = (e.clientX) + 'px'; label.style.top = (e.clientY - 28) + 'px'; }
+  } else {
+    if(hovered){ try{ hovered.material.emissiveIntensity = 0.4; }catch(e){} hovered = null; }
+    document.querySelectorAll('.planet-label').forEach(el => el.style.display='none');
+  }
+});
+
+/* ---------------------------
+   Hologram assistant (simple rule-based)
+   --------------------------- */
+const holoBtn = document.getElementById('holo-button'), holoPanel = document.getElementById('holo-panel');
+const holoClose = document.getElementById('holo-close'), holoMessages = document.getElementById('holo-messages');
+const holoInput = document.getElementById('holo-input'), holoSend = document.getElementById('holo-send');
+
+holoBtn.addEventListener('click', ()=>{ holoPanel.style.display = 'block'; holoInput.focus(); });
+holoClose.addEventListener('click', ()=>{ holoPanel.style.display = 'none'; });
+
+function appendHolo(msg, who='bot'){
+  const d = document.createElement('div'); d.className = 'msg ' + (who === 'user' ? 'user' : 'bot'); d.textContent = msg;
+  holoMessages.appendChild(d); holoMessages.scrollTop = holoMessages.scrollHeight;
+}
+holoSend.addEventListener('click', sendHolo);
+holoInput.addEventListener('keypress', (e)=>{ if(e.key === 'Enter') sendHolo(); });
+
+function sendHolo(){
+  const t = holoInput.value.trim(); if(!t) return; appendHolo(t,'user'); holoInput.value='';
+  setTimeout(()=>{ const q = t.toLowerCase(); if(q.includes('skill')) appendHolo('Keahlian: HTML, CSS, JavaScript, Three.js, PHP, MySQL, UI/UX, AI.'); else if(q.includes('project')) appendHolo('Proyek: Yummaland Kasir; Studio Photo Booking; Portofolio Interaktif.'); else if(q.includes('contact')) appendHolo('Email: vitoliasiano7@outlook.com'); else if(q.includes('about')) appendHolo(profileData.description); else appendHolo('Coba ketik \"skill\", \"project\", \"about\", atau \"contact\".'); }, 600);
+}
+setTimeout(()=> appendHolo('Selamat datang! Mau tur singkat atau eksplorasi bebas? Ketik \"about\".', 'bot'), 1400);
+
+/* ---------------------------
+   Auto-play audio attempt (will require user gesture)
+   --------------------------- */
+document.addEventListener('pointerdown', async ()=>{ if(!audioCtx) await setupAudio(); if(audioCtx && audioCtx.state==='suspended') await audioCtx.resume(); }, { once:true });
+setTimeout(()=>{ try{ audioEl.play(); }catch(e){} }, 1200);
+
+/* ---------------------------
+   Small admin shortcut: ctrl+v change particles
+   --------------------------- */
+document.addEventListener('keydown', (e)=>{ if(e.ctrlKey && e.key.toLowerCase()==='v'){ const newCount = prompt('Particle count (2000-60000):', particleOptions.count); if(newCount){ particleOptions.count = Math.max(2000, Math.min(60000, parseInt(newCount))); makeGalaxy(); alert('Updated particle count'); } } });
+
+/* ---------------------------
+   Log ready
+   --------------------------- */
+console.log('Vitoverse ready — add textures to assets/textures/planets and images to assets/img/');
+</script>
+</body>
+</html>
